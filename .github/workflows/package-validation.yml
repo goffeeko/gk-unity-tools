@@ -1,0 +1,220 @@
+name: Package Validation
+
+on:
+  pull_request:
+    branches: [ master, develop ]
+    paths:
+      - 'Assets/Scripts/**'
+      - 'README.md'
+      - 'package.json'
+
+jobs:
+  validate-structure:
+    name: Validate Package Structure
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Check Unity package structure
+      run: |
+        echo "🔍 验证Unity包结构..."
+        
+        # 必需的文件和目录
+        required_files=(
+          "Assets/Scripts/GameUtils.asmdef"
+          "Assets/Scripts/GameUtils.cs"
+          "README.md"
+        )
+        
+        required_dirs=(
+          "Assets/Scripts/Tools"
+          "Assets/Scripts/Tools/Platform"
+          "Assets/Scripts/Tools/Managers"
+          "Assets/Scripts/Tools/Adapters"
+          "Assets/Scripts/Tools/Utils"
+          "Assets/Scripts/Tools/Examples"
+        )
+        
+        # 检查必需文件
+        for file in "${required_files[@]}"; do
+          if [ ! -f "$file" ]; then
+            echo "❌ 缺少必需文件: $file"
+            exit 1
+          fi
+          echo "✅ 找到文件: $file"
+        done
+        
+        # 检查必需目录
+        for dir in "${required_dirs[@]}"; do
+          if [ ! -d "$dir" ]; then
+            echo "❌ 缺少必需目录: $dir"
+            exit 1
+          fi
+          echo "✅ 找到目录: $dir"
+        done
+        
+        echo "🎉 包结构验证通过！"
+
+  validate-namespace:
+    name: Validate Namespace Usage
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Check GK namespace usage
+      run: |
+        echo "🔍 验证GK命名空间使用..."
+        
+        # 检查Tools目录下的C#文件是否使用GK命名空间
+        cs_files=$(find Assets/Scripts/Tools -name "*.cs" -not -path "*/Examples/*")
+        
+        for file in $cs_files; do
+          if ! grep -q "namespace GK" "$file"; then
+            echo "❌ 文件 $file 未使用GK命名空间"
+            exit 1
+          fi
+          echo "✅ $file 使用了GK命名空间"
+        done
+        
+        echo "🎉 命名空间验证通过！"
+
+  validate-documentation:
+    name: Validate Unity Package
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Check documentation completeness
+      run: |
+        echo "🔍 验证文档完整性..."
+        
+        # 必需的文档文件
+        required_docs=(
+          "README.md"
+          "Assets/Scripts/Tools/README.md"
+          "Assets/Scripts/Tools/NAMESPACE_GUIDE.md"
+          "Assets/Scripts/Tools/USAGE_GUIDE.md"
+          "Assets/Scripts/Tools/API_COMPATIBILITY.md"
+        )
+        
+        for doc in "${required_docs[@]}"; do
+          if [ ! -f "$doc" ]; then
+            echo "❌ 缺少文档文件: $doc"
+            exit 1
+          fi
+          
+          # 检查文件是否为空
+          if [ ! -s "$doc" ]; then
+            echo "❌ 文档文件为空: $doc"
+            exit 1
+          fi
+          
+          echo "✅ 文档文件完整: $doc"
+        done
+        
+        echo "🎉 文档验证通过！"
+
+    - name: Check README structure
+      run: |
+        echo "🔍 验证README结构..."
+        
+        # 检查README必需的章节
+        required_sections=(
+          "# GK - Unity 2D 跨平台游戏工具类"
+          "## ✨ 核心特性"
+          "## 🚀 快速开始"
+          "## 📖 核心功能示例"
+          "## 🤝 贡献"
+        )
+        
+        for section in "${required_sections[@]}"; do
+          if ! grep -q "$section" README.md; then
+            echo "❌ README缺少必需章节: $section"
+            exit 1
+          fi
+          echo "✅ 找到章节: $section"
+        done
+        
+        echo "🎉 README结构验证通过！"
+
+  validate-examples:
+    name: Validate Example Code
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Check example code
+      run: |
+        echo "🔍 验证示例代码..."
+        
+        # 检查示例目录
+        if [ ! -d "Assets/Scripts/Tools/Examples" ]; then
+          echo "❌ 缺少示例代码目录"
+          exit 1
+        fi
+        
+        # 必需的示例文件
+        required_examples=(
+          "Assets/Scripts/Tools/Examples/QuickStartExample.cs"
+          "Assets/Scripts/Tools/Examples/ComprehensiveExample.cs"
+          "Assets/Scripts/Tools/Examples/GameUtilsExample.cs"
+        )
+        
+        for example in "${required_examples[@]}"; do
+          if [ ! -f "$example" ]; then
+            echo "❌ 缺少示例文件: $example"
+            exit 1
+          fi
+          
+          # 检查示例文件是否包含基本的using语句
+          if ! grep -q "using UnityEngine" "$example"; then
+            echo "❌ 示例文件缺少Unity引用: $example"
+            exit 1
+          fi
+          
+          echo "✅ 示例文件完整: $example"
+        done
+        
+        echo "🎉 示例代码验证通过！"
+
+  validate-assembly:
+    name: Validate Assembly Definition
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Check assembly definition
+      run: |
+        echo "🔍 验证Assembly Definition..."
+        
+        asmdef_file="Assets/Scripts/GameUtils.asmdef"
+        
+        if [ ! -f "$asmdef_file" ]; then
+          echo "❌ 缺少Assembly Definition文件"
+          exit 1
+        fi
+        
+        # 检查asmdef文件内容
+        if ! grep -q '"name"' "$asmdef_file"; then
+          echo "❌ Assembly Definition缺少name字段"
+          exit 1
+        fi
+        
+        if ! grep -q '"rootNamespace"' "$asmdef_file"; then
+          echo "❌ Assembly Definition缺少rootNamespace字段"
+          exit 1
+        fi
+        
+        echo "✅ Assembly Definition验证通过"
+        
+        echo "🎉 所有验证完成！"

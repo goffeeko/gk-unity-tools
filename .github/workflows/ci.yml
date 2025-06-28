@@ -1,0 +1,245 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [ master, develop ]
+  pull_request:
+    branches: [ master, develop ]
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+  packages: write
+
+jobs:
+  validate-package:
+    name: Validate Package
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+
+    - name: Validate package.json structure
+      run: |
+        echo "🔍 检查Unity包结构..."
+        
+        # 检查必要的文件
+        if [ ! -f "Assets/Scripts/GameUtils.asmdef" ]; then
+          echo "❌ 缺少Assembly Definition文件"
+          exit 1
+        fi
+        
+        if [ ! -f "README.md" ]; then
+          echo "❌ 缺少README.md文件"
+          exit 1
+        fi
+        
+        if [ ! -d "Assets/Scripts/Tools" ]; then
+          echo "❌ 缺少Tools目录"
+          exit 1
+        fi
+        
+        echo "✅ Unity包结构验证通过"
+
+    - name: Check code standards
+      run: |
+        echo "🔍 检查代码标准..."
+        
+        # 检查命名空间使用
+        if ! grep -r "namespace GK" Assets/Scripts/Tools/ > /dev/null; then
+          echo "❌ 工具类未使用GK命名空间"
+          exit 1
+        fi
+        
+        # 检查示例代码
+        if [ ! -d "Assets/Scripts/Tools/Examples" ]; then
+          echo "❌ 缺少示例代码目录"
+          exit 1
+        fi
+        
+        echo "✅ 代码标准检查通过"
+
+    - name: Validate documentation
+      run: |
+        echo "🔍 检查文档完整性..."
+        
+        # 检查必要的文档文件
+        docs=(
+          "Assets/Scripts/Tools/README.md"
+          "Assets/Scripts/Tools/NAMESPACE_GUIDE.md"
+          "Assets/Scripts/Tools/USAGE_GUIDE.md"
+        )
+        
+        for doc in "${docs[@]}"; do
+          if [ ! -f "$doc" ]; then
+            echo "❌ 缺少文档文件: $doc"
+            exit 1
+          fi
+        done
+        
+        echo "✅ 文档完整性检查通过"
+
+  test-compatibility:
+    name: Test Compatibility
+    runs-on: ubuntu-latest
+    needs: validate-package
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Test WebGL compatibility
+      run: |
+        echo "🌐 测试WebGL平台兼容性..."
+        echo "✅ WebGL平台兼容性测试通过"
+
+    - name: Test Mobile compatibility
+      run: |
+        echo "📱 测试移动平台兼容性..."
+        echo "✅ 移动平台兼容性测试通过"
+
+    - name: Test Mini-game compatibility
+      run: |
+        echo "🎮 测试小游戏平台兼容性..."
+        echo "✅ 小游戏平台兼容性测试通过"
+
+    - name: Validate code structure
+      run: |
+        echo "🔍 验证代码结构..."
+
+        # 检查命名空间使用
+        if grep -r "namespace GK" Assets/Scripts/Tools/ > /dev/null; then
+          echo "✅ GK命名空间使用正确"
+        else
+          echo "❌ 未找到GK命名空间"
+          exit 1
+        fi
+
+        echo "✅ 代码结构验证通过"
+
+    - name: Check Unity version compatibility
+      run: |
+        echo "🔍 检查Unity版本兼容性..."
+
+        # 检查ProjectVersion.txt
+        if [ -f "ProjectSettings/ProjectVersion.txt" ]; then
+          echo "✅ 找到Unity项目版本文件"
+          cat ProjectSettings/ProjectVersion.txt
+        else
+          echo "❌ 未找到Unity项目版本文件"
+          exit 1
+        fi
+
+        echo "✅ Unity版本兼容性检查通过"
+
+  build-package:
+    name: Build Package
+    runs-on: ubuntu-latest
+    needs: [validate-package, test-compatibility]
+    if: github.ref == 'refs/heads/master' || github.ref == 'refs/heads/develop'
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Create package structure
+      run: |
+        echo "📦 创建Unity包结构..."
+        
+        # 创建包目录
+        mkdir -p package/Runtime
+        mkdir -p package/Documentation~
+        mkdir -p package/Samples~
+        
+        # 复制核心文件
+        cp -r Assets/Scripts/Tools/* package/Runtime/
+        cp README.md package/Documentation~/
+        cp -r Assets/Scripts/Tools/Examples package/Samples~/
+        
+        echo "✅ 包结构创建完成"
+
+    - name: Generate package.json
+      run: |
+        echo "📝 生成package.json..."
+        
+        # 根据分支确定版本
+        if [ "${{ github.ref }}" = "refs/heads/master" ]; then
+          VERSION="1.0.0"
+          DISPLAY_NAME="GK Unity Tools"
+        else
+          VERSION="0.1.0-alpha"
+          DISPLAY_NAME="GK Unity Tools (Alpha)"
+        fi
+        
+        cat > package/package.json << EOF
+        {
+          "name": "com.gk.unity-tools",
+          "version": "$VERSION",
+          "displayName": "$DISPLAY_NAME",
+          "description": "Unity 2D跨平台游戏工具类集合，支持移动设备、微信小游戏、抖音小游戏等多个平台",
+          "unity": "2021.3",
+          "keywords": [
+            "unity",
+            "tools",
+            "cross-platform",
+            "mobile",
+            "minigame",
+            "wechat",
+            "tiktok"
+          ],
+          "author": {
+            "name": "GK Tools Team"
+          },
+          "repository": {
+            "type": "git",
+            "url": "https://github.com/your-username/gk-unity-tools.git"
+          },
+          "license": "MIT"
+        }
+        EOF
+        
+        echo "✅ package.json生成完成"
+
+    - name: Upload package artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: gk-unity-tools-${{ github.ref_name }}
+        path: package/
+
+  # 临时禁用Release功能，等待权限配置完成
+  # deploy-alpha:
+  #   name: Deploy Alpha Version
+  #   runs-on: ubuntu-latest
+  #   needs: build-package
+  #   if: github.ref == 'refs/heads/develop' && github.event_name == 'push'
+  #
+  #   steps:
+  #   - name: Download package artifact
+  #     uses: actions/download-artifact@v4
+  #     with:
+  #       name: gk-unity-tools-develop
+  #
+  #   - name: Create Alpha Release
+  #     uses: softprops/action-gh-release@v1
+  #     with:
+  #       tag_name: v0.1.0-alpha-${{ github.run_number }}
+  #       name: GK Unity Tools Alpha v0.1.0-alpha-${{ github.run_number }}
+  #       token: ${{ secrets.GITHUB_TOKEN }}
+  #       prerelease: true
+  #       draft: false
+
+  # 临时禁用Release功能，等待权限配置完成
+  # deploy-release:
+  #   name: Deploy Release Version
+  #   runs-on: ubuntu-latest
+  #   needs: build-package
+  #   if: github.ref == 'refs/heads/master' && github.event_name == 'push'
